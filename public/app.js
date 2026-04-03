@@ -716,7 +716,7 @@ function renderPLComparisonTable(left, right) {
         `
         body.appendChild(tr)
     })
-}
+})
 
 ===== END OF CHUNK 5/6 =====
 ===== START OF dashboard-app.js — CHUNK 6/6 =====
@@ -853,7 +853,7 @@ function renderPLComparisonChart(left, right) {
             }
         }]
     })
-}
+})
 
 // ═══════════════════════════════════════════════════════════
 // END OF FILE
