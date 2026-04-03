@@ -716,10 +716,10 @@ function renderPLComparisonTable(left, right) {
         `
         body.appendChild(tr)
     })
-})
+}
 
 ===== END OF CHUNK 5/6 =====
-===== START OF dashboard-app.js — CHUNK 6/6 =====
+    ===== START OF dashboard-app.js — CHUNK 6/6 =====
 
 // ═══════════════════════════════════════════════════════════
 // P&L COMPARISON — KPIs
@@ -853,11 +853,10 @@ function renderPLComparisonChart(left, right) {
             }
         }]
     })
-})
+}
 
 // ═══════════════════════════════════════════════════════════
 // END OF FILE
 // ═══════════════════════════════════════════════════════════
 
 ===== END OF CHUNK 6/6 =====
-
