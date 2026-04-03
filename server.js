@@ -10,7 +10,21 @@ const PORT = process.env.PORT || 3000
 
 app.use(express.static('public'))
 
-const db = new sqlite3.Database('./finance.db')
+const dbPath = path.join(__dirname, 'finance.db');
+const gzPath = path.join(__dirname, 'finance.db.gz');
+
+// If finance.db does not exist but finance.db.gz does, decompress it
+if (!fs.existsSync(dbPath) && fs.existsSync(gzPath)) {
+    console.log("Decompressing finance.db.gz...");
+    const zlib = require('zlib');
+    const compressed = fs.readFileSync(gzPath);
+    const decompressed = zlib.gunzipSync(compressed);
+    fs.writeFileSync(dbPath, decompressed);
+    console.log("Decompression complete.");
+}
+
+const db = new sqlite3.Database(dbPath);
+
 
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS sales (
