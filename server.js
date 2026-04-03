@@ -110,4 +110,155 @@ function processSalesFile(filePath, company) {
 // ───────────────────────────────────────────────────────────
 function processTBFile(filePath) {
     isLoaded(filePath, already => {
-        if (already) { console
+        if (already) { console.log('Skip:', path.basename(filePath)); return }
+        const { company, month, year, period } = parseTBFilename(filePath)
+        const rows = []
+        fs.createReadStream(filePath).pipe(csv())
+            .on('data', r => rows.push(r))
+            .on('end', () => {
+                db.serialize(() => {
+                    db.run('BEGIN TRANSACTION')
+                    const stmt = db.prepare(`INSERT INTO tb VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
+                    rows.forEach(r => {
+                        const keys    = Object.keys(r)
+                        const sortKey = keys.find(k => k.replace(/^\uFEFF/, '').trim().toUpperCase() === 'SORT') || keys[0]
+                        const sort    = (r[sortKey] || '').trim()
+                        if (!sort || sort === '-') return
+                        stmt.run([
+                            company, period, month, year, sort,
+                            (r['ACCOUNT NO'] || '').trim(),
+                            (r['ACCOUNT NAME'] || '').trim(),
+                            parseFloat(r[' OPENING BALANCE '] || r['OPENING BALANCE'] || 0),
+                            parseFloat(r[' DEBIT AMOUNT ']    || r['DEBIT AMOUNT']    || 0),
+                            parseFloat(r[' CREDIT AMOUNT ']   || r['CREDIT AMOUNT']   || 0),
+                            parseFloat(r[' BALANCE ']         || r['BALANCE']         || 0)
+                        ])
+                    })
+                    stmt.finalize()
+                    db.run('COMMIT')
+                })
+                markLoaded(filePath)
+                console.log('Loaded TB:', path.basename(filePath), '->', company, month, year, rows.length, 'rows')
+            })
+    })
+}
+
+// ───────────────────────────────────────────────────────────
+// WATCHER
+// ───────────────────────────────────────────────────────────
+const dataPath = path.join(__dirname, 'data')
+if (!fs.existsSync(dataPath)) fs.mkdirSync(dataPath)
+
+chokidar.watch(dataPath, { persistent: true, ignoreInitial: false })
+    .on('add', filePath => {
+        if (!filePath.endsWith('.csv')) return
+        const rel   = path.relative(dataPath, filePath)
+        const parts = rel.split(path.sep)
+        if (parts.length < 3) return
+        const folder = parts[1].toLowerCase()
+        if      (folder === 'sales') processSalesFile(filePath, parts[0])
+        else if (folder === 'tb')    processTBFile(filePath)
+    })
+
+// ───────────────────────────────────────────────────────────
+// EXISTING ENDPOINTS
+// ───────────────────────────────────────────────────────────
+app.get('/sales', (req, res) => {
+    db.all(`SELECT * FROM sales`, [], (e, rows) => res.json(rows))
+})
+
+const PL_CATS = [
+    'Sales of Goods','Cost of Sales','Gain on foreign exchange',
+    'Other Income','Finance Cost','Distribution Costs','Administrative expenses'
+]
+
+app.get('/pl', (req, res) => {
+    const ph = PL_CATS.map(() => '?').join(',')
+    db.all(
+        `SELECT sort, account_no, account_name, company, month, year,
+                SUM(opening) as opening, SUM(debit) as debit,
+                SUM(credit) as credit, SUM(balance) as balance
+         FROM tb WHERE sort IN (${ph})
+         GROUP BY sort, account_no, account_name, company, month, year
+         ORDER BY account_no`,
+        PL_CATS,
+        (e, rows) => res.json(rows)
+    )
+})
+
+// ───────────────────────────────────────────────────────────
+// NEW: PERIOD COMPARISON HELPERS
+// ───────────────────────────────────────────────────────────
+function parsePeriod(periodStr) {
+    const [year, mm] = periodStr.split('-')
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    return { month: months[parseInt(mm) - 1], year }
+}
+
+function getPLForPeriod(month, year) {
+    return new Promise((resolve, reject) => {
+        const ph = PL_CATS.map(() => '?').join(',')
+        db.all(
+            `SELECT sort, SUM(balance) as balance
+             FROM tb
+             WHERE sort IN (${ph}) AND month = ? AND year = ?
+             GROUP BY sort`,
+            [...PL_CATS, month, year],
+            (err, rows) => {
+                if (err) return reject(err)
+                const out = {}
+                rows.forEach(r => out[r.sort] = r.balance)
+                resolve(out)
+            }
+        )
+    })
+}
+
+// ───────────────────────────────────────────────────────────
+// NEW: PERIOD A vs PERIOD B COMPARISON ENDPOINT
+// ───────────────────────────────────────────────────────────
+app.get('/pl-compare', async (req, res) => {
+    try {
+        const { periodA, periodB } = req.query
+        if (!periodA || !periodB) {
+            return res.status(400).json({ error: 'periodA and periodB are required' })
+        }
+
+        const pA = parsePeriod(periodA)
+        const pB = parsePeriod(periodB)
+
+        const plA = await getPLForPeriod(pA.month, pA.year)
+        const plB = await getPLForPeriod(pB.month, pB.year)
+
+        const accounts = new Set([...Object.keys(plA), ...Object.keys(plB)])
+        const result = []
+
+        accounts.forEach(acc => {
+            const a = plA[acc] || 0
+            const b = plB[acc] || 0
+            const variance = a - b
+            const percent = b !== 0 ? variance / b : null
+
+            result.push({
+                account: acc,
+                periodA: a,
+                periodB: b,
+                variance,
+                percent,
+                existsInA: plA[acc] !== undefined,
+                existsInB: plB[acc] !== undefined
+            })
+        })
+
+        res.json({ periodA, periodB, data: result })
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: 'Internal server error' })
+    }
+})
+
+// ───────────────────────────────────────────────────────────
+// START SERVER
+// ───────────────────────────────────────────────────────────
+app.listen(PORT, () => console.log(`\nFinance Dashboard → http://localhost:${PORT}\n`))
