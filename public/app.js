@@ -234,7 +234,7 @@ function renderSalesChart() {
     if (salesDrillLabel) renderSalesDrillPanels()
 }
 
-===== END OF CHUNK 1/6 =====
+===== END OF CHUNK 1/6 ====
 ===== START OF dashboard-app.js — CHUNK 2/6 =====
 
 // ═══════════════════════════════════════════════════════════
@@ -368,7 +368,6 @@ function hideTooltip() {
 document.addEventListener('mouseleave', hideTooltip)
 
 ===== END OF CHUNK 2/6 =====
-
 ===== START OF dashboard-app.js — CHUNK 3/6 =====
 
 // ═══════════════════════════════════════════════════════════
@@ -500,7 +499,6 @@ function renderPLTable(rows, revenue) {
 }
 
 ===== END OF CHUNK 3/6 =====
-
 ===== START OF dashboard-app.js — CHUNK 4/6 =====
 
 // ═══════════════════════════════════════════════════════════
@@ -719,7 +717,7 @@ function renderPLComparisonTable(left, right) {
 }
 
 ===== END OF CHUNK 5/6 =====
-    ===== START OF dashboard-app.js — CHUNK 6/6 =====
+===== START OF dashboard-app.js — CHUNK 6/6 =====
 
 // ═══════════════════════════════════════════════════════════
 // P&L COMPARISON — KPIs
